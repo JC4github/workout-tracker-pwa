@@ -52,7 +52,7 @@ function Empty({ text }: { text: string }) { return <p className="empty">{text}<
 function Diagram({ view, state, onTap, onLong }: { view: BodyView; state: (id: string) => string; onTap: (m: Muscle) => void; onLong: (m: Muscle) => void }) {
   const timer = useRef<number | undefined>(undefined)
   const held = useRef(false)
-  const image = view === 'front' ? '/bodymap-front.png' : '/bodymap-back.png'
+  const image = `${import.meta.env.BASE_URL}bodymap-${view}.png`
   const artistViewBox = '0 0 660.46 1206.46'
 
   return <div className="body-wrap">
