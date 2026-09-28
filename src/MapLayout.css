@@ -1,6 +1,7 @@
 /* Give the interactive map more of the screen without crowding its controls. */
 .app-shell {
-  padding-top: 16px;
+  /* Keep every page below the iOS status bar when launched full-screen. */
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
 }
 
 .topbar {
