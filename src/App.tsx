@@ -27,7 +27,11 @@ export default function App() {
   const [recovery, setRecovery] = useState(72), [detail, setDetail] = useState<Muscle | null>(null), [pbMuscle, setPbMuscle] = useState<Muscle | null>(null), [toast, setToast] = useState<Toast | null>(null)
   const timer = useRef<number | undefined>(undefined)
   const refresh = async () => { const [w, p, n, s] = await Promise.all([db.workouts.orderBy('timestamp').reverse().toArray(), db.personalBests.orderBy('timestamp').reverse().toArray(), db.notes.orderBy('updatedAt').reverse().toArray(), db.settings.get('recoveryHours')]); setWorkouts(w); setPbs(p); setNotes(n); setRecovery(Number(s?.value ?? 72)) }
-  useEffect(() => { void refresh() }, [])
+  useEffect(() => {
+    void refresh()
+    const installed = window.matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true
+    if (installed && screen.orientation?.lock) void screen.orientation.lock('portrait').catch(() => {})
+  }, [])
   const notify = (next: Toast) => { clearTimeout(timer.current); setToast(next); timer.current = window.setTimeout(() => setToast(null), 1000) }
   const latest = useMemo(() => { const map = new Map<string, Workout>(); workouts.forEach((w) => { const id = canonicalMuscleId(w.muscleId); const existing = map.get(id); if (!existing || new Date(w.timestamp) > new Date(existing.timestamp)) map.set(id, w) }); return map }, [workouts])
   const state = (id: string) => { const w = latest.get(id); if (!w) return 'idle'; const age = Date.now() - new Date(w.timestamp).getTime(); if (age >= recovery * 3600000) return 'idle'; return age < 86400000 ? 'fresh' : age < 172800000 ? 'warm' : 'cool' }
@@ -181,15 +185,15 @@ function Stats({ workouts, pbs }: { workouts: Workout[]; pbs: PersonalBest[] }) 
     return { date: cellDate, count: beforeRange || future ? 0 : workoutCounts.get(localDayKey(cellDate)) ?? 0, beforeRange, future }
   }))
   const activeDays = heatmapWeeks.flat().filter((day) => !day.beforeRange && !day.future && day.count > 0).length
-  const sessionMap = new Map<string, Workout[]>()
-  workouts.forEach((workout) => {
-    const sessionId = workout.sessionId ?? new Date(workout.timestamp).toISOString().slice(0, 13)
-    sessionMap.set(sessionId, [...(sessionMap.get(sessionId) ?? []), workout])
+  const sessions: { id: string; records: Workout[] }[] = []
+  workouts.slice().sort((a, b) => a.timestamp.localeCompare(b.timestamp)).forEach((workout) => {
+    const current = sessions[sessions.length - 1]
+    const previous = current?.records[current.records.length - 1]
+    const gap = previous ? new Date(workout.timestamp).getTime() - new Date(previous.timestamp).getTime() : Infinity
+    if (current && gap <= 4 * 60 * 60 * 1000) current.records.push(workout)
+    else sessions.push({ id: String(workout.id ?? workout.timestamp), records: [workout] })
   })
-  const sessions = Array.from(sessionMap, ([id, records]) => ({
-    id,
-    records: records.slice().sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
-  })).sort((a, b) => b.records[b.records.length - 1].timestamp.localeCompare(a.records[a.records.length - 1].timestamp))
+  sessions.reverse()
   const pbGraphs = MUSCLES.map((muscle) => ({
     muscle,
     records: pbs.filter((pb) => canonicalMuscleId(pb.muscleId) === muscle.id).slice().sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
